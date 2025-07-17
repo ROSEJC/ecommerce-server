@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -21,37 +20,48 @@ enum Role {
 }
 
 model User {
-  id          Int       @id @default(autoincrement())
-  name        String
-  email       String    @unique
-  password    String
-  role        Role      @default(USER)
-  cart        Cart?    @relation("CartUser")
-  cartId      Int?      // mỗi user có thể có một giỏ hàng hiện tại
-  orders      Order[]   // một user có nhiều đơn hàng
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  cart      Cart?    @relation("CartUser")
+  cartId    Int? // mỗi user có thể có một giỏ hàng hiện tại
+  orders    Order[] // một user có nhiều đơn hàng
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  products  Product[] // một category có nhiều products:contentReference[oaicite:5]{index=5}
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  products Product[] // một category có nhiều products:contentReference[oaicite:5]{index=5}
 }
 
 model Product {
-  id          Int           @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
   description String
   price       Float
   image       String
-  category    Category      @relation(fields: [categoryId], references: [id])
+  category    Category @relation(fields: [categoryId], references: [id])
   categoryId  Int
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  
-  cartItems   CartItem[]    @relation("ProductToCartItems")
-  orderItems  OrderItem[]   @relation("ProductToOrderItems")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cartItems  CartItem[]  @relation("ProductToCartItems")
+  orderItems OrderItem[] @relation("ProductToOrderItems")
+
+  reviews Review[]
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  product   Product  @relation(fields: [productId], references: [id])
+  productId Int
+  rating    Int // từ 1 đến 5 sao
+  comment   String?
+  createdAt DateTime @default(now())
 }
 
 model Cart {
@@ -62,6 +72,7 @@ model Cart {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }
+
 model CartItem {
   id        Int     @id @default(autoincrement())
   cart      Cart    @relation("CartToItems", fields: [cartId], references: [id])
@@ -70,6 +81,7 @@ model CartItem {
   productId Int
   quantity  Int
 }
+
 model Order {
   id        Int         @id @default(autoincrement())
   user      User        @relation(fields: [userId], references: [id])
