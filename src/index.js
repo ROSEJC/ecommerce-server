@@ -183,6 +183,114 @@ app.get('/cart/total/:userId' , async (req,res) => {
     res.status(500).json({message: err.message})
   }
 });
+
+
+
+
+
+
+// POST /checkout/:userId
+app.post('/checkout/:userId', async (req, res) => {
+  const userId = parseInt(req.params.userId);
+  const { shippingAddress, paymentMethod } = req.body;
+
+  if (!shippingAddress || !paymentMethod) {
+    return res.status(400).json({ message: "Missing shipping info or payment method" });
+  }
+
+  try {
+    const cart = await prisma.cart.findUnique({
+      where: { userId },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({ message: "Cart is empty or not found" });
+    }
+
+    // Tạo Order
+    const order = await prisma.order.create({
+      data: {
+        userId,
+        shippingAddress,
+        paymentMethod,
+        status: "Pending", // hoặc "Processing"
+        items: {
+          create: cart.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            price: item.product.price,
+          })),
+        },
+      },
+    });
+
+    // Xoá giỏ hàng sau khi checkout
+    await prisma.cartItem.deleteMany({
+      where: { cartId: cart.id },
+    });
+
+    res.status(201).json({ message: "Order placed successfully", orderId: order.id });
+  } catch (error) {
+    console.error("Checkout Error:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+//Get User Cart
+app.get('/orders/:userId', async (req, res) => {
+  const userId = parseInt(req.params.userId);
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: { userId },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' }, // lịch sử mới nhất trước
+    });
+
+    res.json(orders);
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
+app.patch('/orders/:orderId/status', async (req, res) => {
+  const orderId = parseInt(req.params.orderId);
+  const { status } = req.body;
+
+  const validStatus = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+
+  if (!validStatus.includes(status)) {
+    return res.status(400).json({ message: "Invalid order status" });
+  }
+
+  try {
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: { status },
+    });
+
+    res.json({ message: "Order status updated", order: updatedOrder });
+  } catch (error) {
+    console.error("Error updating order:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
