@@ -62,6 +62,127 @@ app.get('/product/:id', async (req, res) => {
 });
 
 
+// POST /api/cart/add
+app.post('/cart/add', async (req, res) => {
+  const { userId, productId, quantity, items } = req.body;
+
+  if (!userId || (!items && (!productId || !quantity))) {
+    return res.status(400).json({ message: 'Dữ liệu không hợp lệ.' });
+  }
+
+  try {
+    const userCart = await prisma.cart.findUnique({
+      where: { userId },
+      include: { items: true },
+    });
+
+    if (!userCart) {
+      return res.status(404).json({ message: 'Giỏ hàng không tồn tại.' });
+    }
+
+    const results = [];
+
+    // ✅ Nếu là nhiều sản phẩm
+    if (Array.isArray(items)) {
+      for (const { productId, quantity } of items) {
+        const existingItem = await prisma.cartItem.findFirst({
+          where: { cartId: userCart.id, productId },
+        });
+
+        if (existingItem) {
+          const updatedItem = await prisma.cartItem.update({
+            where: { id: existingItem.id },
+            data: { quantity: existingItem.quantity + quantity },
+          });
+          results.push(updatedItem);
+        } else {
+          const newItem = await prisma.cartItem.create({
+            data: { cartId: userCart.id, productId, quantity },
+          });
+          results.push(newItem);
+        }
+      }
+
+      return res.json({ message: 'Thêm nhiều sản phẩm thành công.', items: results });
+    }
+
+    // ✅ Nếu là 1 sản phẩm duy nhất
+    const existingItem = await prisma.cartItem.findFirst({
+      where: { cartId: userCart.id, productId },
+    });
+
+    if (existingItem) {
+      const updatedItem = await prisma.cartItem.update({
+        where: { id: existingItem.id },
+        data: { quantity: existingItem.quantity + quantity },
+      });
+      return res.json({ message: 'Đã cập nhật sản phẩm.', item: updatedItem });
+    } else {
+      const newItem = await prisma.cartItem.create({
+        data: { cartId: userCart.id, productId, quantity },
+      });
+      return res.json({ message: 'Đã thêm sản phẩm mới.', item: newItem });
+    }
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+
+app.get('/cart/:userId', async (req, res) => {
+  const userId = parseInt(req.params.userId);
+
+  try {
+    const cart = await prisma.cart.findUnique({
+      where: { userId },
+      include: {
+        items: {
+          include: {
+            product: true,
+          }
+        }
+      }
+    });
+
+    if (!cart) {
+      return res.status(404).json({ message: 'Không tìm thấy giỏ hàng' });
+    }
+
+    res.json(cart);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+app.get('/cart/total/:userId' , async (req,res) => {
+  const userId = parseInt(req.params.userId);
+  try {
+    const cart = await prisma.cart.findUnique({
+      where: {userId},
+      include: {
+        items:{
+          include: {
+            product: true,
+          }
+        }
+      }
+    });
+    if(!cart) 
+      return res.status(404).json({message: 'Khong tim thay gio hang'});
+
+    const total = cart.items.reduce((sum,item) =>{
+      return sum + item.quantity * item.product.price
+    },0)
+    res.json({total});
+  }catch(err) {
+    console.error(err)
+    res.status(500).json({message: err.message})
+  }
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
