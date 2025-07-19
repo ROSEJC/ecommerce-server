@@ -6,6 +6,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+const bcrypt = require('bcrypt');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -290,6 +292,70 @@ app.patch('/orders/:orderId/status', async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+
+app.post('/register', async (req, res) => {
+  const { email, password, name } = req.body;
+
+  try {
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: "Email đã được đăng ký" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name
+      }
+    });
+
+    res.status(201).json({ user: newUser, id: newUser.id });
+  } catch (err) {
+    res.status(500).json({ message: err.message || "Internal Server Error" });
+  }
+});
+
+
+app.post('/sign_in', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Email không tồn tại" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Mật khẩu không đúng" });
+    }
+
+    res.status(200).json({
+      message: "Đăng nhập thành công",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message || "Lỗi máy chủ" });
+  }
+});
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
