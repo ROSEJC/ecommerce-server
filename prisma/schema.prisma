@@ -49,10 +49,26 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  quantity Int @default(0) // ✅ Số lượng còn trong kho
+
   cartItems  CartItem[]  @relation("ProductToCartItems")
   orderItems OrderItem[] @relation("ProductToOrderItems")
+  reviews    Review[]
 
-  reviews Review[]
+  modelName       String?
+  shape           String?
+  controls        String?
+  features        String[]
+  eartip          String?
+  batteryBuds     Int?
+  batteryCase     Int?
+  chargePort      String?
+  wingtips        Boolean?
+  releaseYear     Int?
+  waterResistance String?
+  supportedCodecs String[]
+  minLatencyMs    Int?
+  manufacturer    String?
 }
 
 model Review {
@@ -83,14 +99,14 @@ model CartItem {
 }
 
 model Order {
-  id        Int         @id @default(autoincrement())
-  user      User        @relation(fields: [userId], references: [id])
-  userId    Int
-  status    String      @default("Pending")
-  items     OrderItem[] @relation("OrderToItems") 
-  shippingAddress String    
-  paymentMethod   String     
-  createdAt DateTime    @default(now())
+  id              Int         @id @default(autoincrement())
+  user            User        @relation(fields: [userId], references: [id])
+  userId          Int
+  status          String      @default("Pending")
+  items           OrderItem[] @relation("OrderToItems")
+  shippingAddress String
+  paymentMethod   String
+  createdAt       DateTime    @default(now())
 }
 
 model OrderItem {

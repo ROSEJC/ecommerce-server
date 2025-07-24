@@ -74,9 +74,9 @@ const products = [
   }
 ];
 const categories = [
-  { name: "Electronics" },
-  { name: "Books" },
-  { name: "Clothing" }
+  {name: "Electronics" },
+  {name: "Books" },
+  {name: "Clothing" }
 ];
 const users = [
   {
@@ -112,16 +112,12 @@ const users = [
 ];
 
 async function main() {
+  await prisma.product.deleteMany();
+    await prisma.category.deleteMany();
+    await prisma.user.deleteMany();
+    
   for (const category of categories) {
     await prisma.category.create({ data: category });
-  }
-
-  for (const user of users) {
-    await prisma.user.create({ data: user });
-  }
-
-  for (const product of products) {
-    await prisma.product.create({ data: product });
   }
 }
 

@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN     "batteryBuds" INTEGER,
+ADD COLUMN     "batteryCase" INTEGER,
+ADD COLUMN     "chargePort" TEXT,
+ADD COLUMN     "controls" TEXT,
+ADD COLUMN     "eartip" TEXT,
+ADD COLUMN     "features" TEXT[],
+ADD COLUMN     "manufacturer" TEXT,
+ADD COLUMN     "minLatencyMs" INTEGER,
+ADD COLUMN     "modelName" TEXT,
+ADD COLUMN     "releaseYear" INTEGER,
+ADD COLUMN     "shape" TEXT,
+ADD COLUMN     "supportedCodecs" TEXT[],
+ADD COLUMN     "waterResistance" TEXT,
+ADD COLUMN     "wingtips" BOOLEAN;

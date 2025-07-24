@@ -1,0 +1,2 @@
+ALTER SEQUENCE "Product_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "Category_id_seq" RESTART WITH 1;
