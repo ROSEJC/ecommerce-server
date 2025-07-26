@@ -1,21 +1,39 @@
 // src/app.js
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
 
-const bcrypt = require('bcrypt');
+const bcrypt = require("bcrypt");
+const { middleware } = require("yargs");
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('API is running');
+const jwt = require("jsonwebtoken");
+
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: "Chưa đăng nhập" });
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, "SECRET_KEY");
+    req.user = decoded; // Gán thông tin user vào request
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: "Token không hợp lệ" });
+  }
+};
+
+app.get("/", (req, res) => {
+  res.send("API is running");
 });
-app.get('/product', async (req, res) => {
+app.get("/product", async (req, res) => {
   const {
     category,
     minPrice,
@@ -23,13 +41,17 @@ app.get('/product', async (req, res) => {
     search,
     page = 1,
     limit = 10,
+    shape,
+    brand,
   } = req.query;
 
   const where = {
     ...(category && { category: { name: category } }),
     ...(minPrice && { price: { gte: Number(minPrice) } }),
     ...(maxPrice && { price: { lte: Number(maxPrice) } }),
-    ...(search && { name: { contains: search, mode: 'insensitive' } }),
+    ...(search && { name: { contains: search, mode: "insensitive" } }),
+    ...(shape && { shape }),
+    ...(brand && { manufacturer: brand }),
   };
 
   const products = await prisma.product.findMany({
@@ -39,37 +61,52 @@ app.get('/product', async (req, res) => {
     include: { category: true },
   });
 
-    res.json(products); 
+  res.json(products);
+});
+app.get("/test", async (req, res) => {
+  try {
+    const brands = await prisma.product.groupBy({
+      by: ["manufacturer"],
+      where: {
+        manufacturer: {
+          not: null,
+        },
+      },
+    });
+
+    res.json(brands);
+  } catch (error) {
+    console.error("Lỗi khi groupBy:", error);
+    res.status(500).json({ error: "Lỗi khi lấy brands" });
+  }
 });
 
-
-app.get('/product/:id', async (req, res) => {
+app.get("/product/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
     const product = await prisma.product.findUnique({
       where: { id: Number(id) },
-      include: { category: true }, 
+      include: { category: true },
     });
 
     if (!product) {
-      return res.status(404).json({ error: 'Product not found' });
+      return res.status(404).json({ error: "Product not found" });
     }
 
     res.json(product);
   } catch (error) {
-    console.error('Error fetching product:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Error fetching product:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-
 // POST /api/cart/add
-app.post('/cart/add', async (req, res) => {
+app.post("/cart/add", authMiddleware, async (req, res) => {
   const { userId, productId, quantity, items } = req.body;
 
   if (!userId || (!items && (!productId || !quantity))) {
-    return res.status(400).json({ message: 'Dữ liệu không hợp lệ.' });
+    return res.status(400).json({ message: "Dữ liệu không hợp lệ." });
   }
 
   try {
@@ -79,7 +116,7 @@ app.post('/cart/add', async (req, res) => {
     });
 
     if (!userCart) {
-      return res.status(404).json({ message: 'Giỏ hàng không tồn tại.' });
+      return res.status(404).json({ message: "Giỏ hàng không tồn tại." });
     }
 
     const results = [];
@@ -105,7 +142,10 @@ app.post('/cart/add', async (req, res) => {
         }
       }
 
-      return res.json({ message: 'Thêm nhiều sản phẩm thành công.', items: results });
+      return res.json({
+        message: "Thêm nhiều sản phẩm thành công.",
+        items: results,
+      });
     }
 
     // ✅ Nếu là 1 sản phẩm duy nhất
@@ -118,24 +158,28 @@ app.post('/cart/add', async (req, res) => {
         where: { id: existingItem.id },
         data: { quantity: existingItem.quantity + quantity },
       });
-      return res.json({ message: 'Đã cập nhật sản phẩm.', item: updatedItem });
+      return res.json({ message: "Đã cập nhật sản phẩm.", item: updatedItem });
     } else {
       const newItem = await prisma.cartItem.create({
         data: { cartId: userCart.id, productId, quantity },
       });
-      return res.json({ message: 'Đã thêm sản phẩm mới.', item: newItem });
+      return res.json({ message: "Đã thêm sản phẩm mới.", item: newItem });
     }
-
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: err.message });
   }
 });
 
-
-app.get('/cart/:userId', async (req, res) => {
+app.get("/cart/:userId", authMiddleware, async (req, res) => {
   const userId = parseInt(req.params.userId);
+  const loggedUserID = req.user.userId;
 
+  if (userId !== loggedInUserId) {
+    return res
+      .status(403)
+      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
+  }
   try {
     const cart = await prisma.cart.findUnique({
       where: { userId },
@@ -143,13 +187,13 @@ app.get('/cart/:userId', async (req, res) => {
         items: {
           include: {
             product: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
 
     if (!cart) {
-      return res.status(404).json({ message: 'Không tìm thấy giỏ hàng' });
+      return res.status(404).json({ message: "Không tìm thấy giỏ hàng" });
     }
 
     res.json(cart);
@@ -159,45 +203,51 @@ app.get('/cart/:userId', async (req, res) => {
   }
 });
 
-
-app.get('/cart/total/:userId' , async (req,res) => {
+app.get("/cart/total/:userId", authMiddleware, async (req, res) => {
   const userId = parseInt(req.params.userId);
+
+  if (userId !== loggedInUserId) {
+    return res
+      .status(403)
+      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
+  }
   try {
     const cart = await prisma.cart.findUnique({
-      where: {userId},
+      where: { userId },
       include: {
-        items:{
+        items: {
           include: {
             product: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
-    if(!cart) 
-      return res.status(404).json({message: 'Khong tim thay gio hang'});
+    if (!cart)
+      return res.status(404).json({ message: "Khong tim thay gio hang" });
 
-    const total = cart.items.reduce((sum,item) =>{
-      return sum + item.quantity * item.product.price
-    },0)
-    res.json({total});
-  }catch(err) {
-    console.error(err)
-    res.status(500).json({message: err.message})
+    const total = cart.items.reduce((sum, item) => {
+      return sum + item.quantity * item.product.price;
+    }, 0);
+    res.json({ total });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
 });
 
-
-
-
-
-
 // POST /checkout/:userId
-app.post('/checkout/:userId', async (req, res) => {
+app.post("/checkout/:userId", authMiddleware, async (req, res) => {
   const userId = parseInt(req.params.userId);
   const { shippingAddress, paymentMethod } = req.body;
-
+  if (userId !== loggedInUserId) {
+    return res
+      .status(403)
+      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
+  }
   if (!shippingAddress || !paymentMethod) {
-    return res.status(400).json({ message: "Missing shipping info or payment method" });
+    return res
+      .status(400)
+      .json({ message: "Missing shipping info or payment method" });
   }
 
   try {
@@ -238,7 +288,9 @@ app.post('/checkout/:userId', async (req, res) => {
       where: { cartId: cart.id },
     });
 
-    res.status(201).json({ message: "Order placed successfully", orderId: order.id });
+    res
+      .status(201)
+      .json({ message: "Order placed successfully", orderId: order.id });
   } catch (error) {
     console.error("Checkout Error:", error);
     res.status(500).json({ message: error.message });
@@ -246,9 +298,13 @@ app.post('/checkout/:userId', async (req, res) => {
 });
 
 //Get User Cart
-app.get('/orders/:userId', async (req, res) => {
+app.get("/orders/:userId", authMiddleware, async (req, res) => {
   const userId = parseInt(req.params.userId);
-
+  if (userId !== loggedInUserId) {
+    return res
+      .status(403)
+      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
+  }
   try {
     const orders = await prisma.order.findMany({
       where: { userId },
@@ -259,7 +315,7 @@ app.get('/orders/:userId', async (req, res) => {
           },
         },
       },
-      orderBy: { createdAt: 'desc' }, // lịch sử mới nhất trước
+      orderBy: { createdAt: "desc" }, // lịch sử mới nhất trước
     });
 
     res.json(orders);
@@ -269,12 +325,21 @@ app.get('/orders/:userId', async (req, res) => {
   }
 });
 
-
-app.patch('/orders/:orderId/status', async (req, res) => {
+app.patch("/orders/:orderId/status", authMiddleware, async (req, res) => {
   const orderId = parseInt(req.params.orderId);
   const { status } = req.body;
-
-  const validStatus = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+  if (userId !== loggedInUserId) {
+    return res
+      .status(403)
+      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
+  }
+  const validStatus = [
+    "Pending",
+    "Processing",
+    "Shipped",
+    "Delivered",
+    "Cancelled",
+  ];
 
   if (!validStatus.includes(status)) {
     return res.status(400).json({ message: "Invalid order status" });
@@ -293,13 +358,12 @@ app.patch('/orders/:orderId/status', async (req, res) => {
   }
 });
 
-
-app.post('/register', async (req, res) => {
+app.post("/signup", async (req, res) => {
   const { email, password, name } = req.body;
 
   try {
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (existingUser) {
@@ -312,8 +376,8 @@ app.post('/register', async (req, res) => {
       data: {
         email,
         password: hashedPassword,
-        name
-      }
+        name,
+      },
     });
 
     res.status(201).json({ user: newUser, id: newUser.id });
@@ -322,14 +386,12 @@ app.post('/register', async (req, res) => {
   }
 });
 
-
-app.post('/sign_in', async (req, res) => {
+app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (!user) {
@@ -341,21 +403,23 @@ app.post('/sign_in', async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Mật khẩu không đúng" });
     }
+    const token = jwt.sign({ userId: user.id }, "SECRET_KEY", {
+      expiresIn: "1h",
+    });
 
     res.status(200).json({
       message: "Đăng nhập thành công",
       user: {
         id: user.id,
         name: user.name,
-        email: user.email
-      }
+        email: user.email,
+        token,
+      },
     });
-
   } catch (err) {
-    res.status(500).json({ message: err.message || "Lỗi máy chủ" });
+    res.status(500).json({ message: err || "Lỗi máy chủ" });
   }
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
