@@ -15,6 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 const jwt = require("jsonwebtoken");
+const e = require("express");
 
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -38,7 +39,7 @@ app.get("/product", async (req, res) => {
     category,
     minPrice,
     maxPrice,
-    search,
+    name,
     page = 1,
     limit = 10,
     shape,
@@ -49,7 +50,7 @@ app.get("/product", async (req, res) => {
     ...(category && { category: { name: category } }),
     ...(minPrice && { price: { gte: Number(minPrice) } }),
     ...(maxPrice && { price: { lte: Number(maxPrice) } }),
-    ...(search && { name: { contains: search, mode: "insensitive" } }),
+    ...(name && { name: { contains: name, mode: "insensitive" } }),
     ...(shape && { shape }),
     ...(brand && { manufacturer: brand }),
   };
@@ -62,23 +63,6 @@ app.get("/product", async (req, res) => {
   });
 
   res.json(products);
-});
-app.get("/test", async (req, res) => {
-  try {
-    const brands = await prisma.product.groupBy({
-      by: ["manufacturer"],
-      where: {
-        manufacturer: {
-          not: null,
-        },
-      },
-    });
-
-    res.json(brands);
-  } catch (error) {
-    console.error("Lỗi khi groupBy:", error);
-    res.status(500).json({ error: "Lỗi khi lấy brands" });
-  }
 });
 
 app.get("/product/:id", async (req, res) => {
@@ -103,71 +87,68 @@ app.get("/product/:id", async (req, res) => {
 
 // POST /api/cart/add
 app.post("/cart/add", authMiddleware, async (req, res) => {
-  const { userId, productId, quantity, items } = req.body;
+  const { userId, productId, quantity } = req.body;
 
-  if (!userId || (!items && (!productId || !quantity))) {
-    return res.status(400).json({ message: "Dữ liệu không hợp lệ." });
+  // Kiểm tra đầu vào
+  if (!userId || !productId || quantity <= 0) {
+    return res.status(400).json({ message: "Yêu cầu nhập đủ thông tin" });
   }
 
   try {
-    const userCart = await prisma.cart.findUnique({
+    // Tìm giỏ hàng của người dùng
+    let userCart = await prisma.cart.findUnique({
       where: { userId },
       include: { items: true },
     });
 
+    // Nếu chưa có thì tạo giỏ hàng
     if (!userCart) {
-      return res.status(404).json({ message: "Giỏ hàng không tồn tại." });
-    }
-
-    const results = [];
-
-    // ✅ Nếu là nhiều sản phẩm
-    if (Array.isArray(items)) {
-      for (const { productId, quantity } of items) {
-        const existingItem = await prisma.cartItem.findFirst({
-          where: { cartId: userCart.id, productId },
-        });
-
-        if (existingItem) {
-          const updatedItem = await prisma.cartItem.update({
-            where: { id: existingItem.id },
-            data: { quantity: existingItem.quantity + quantity },
-          });
-          results.push(updatedItem);
-        } else {
-          const newItem = await prisma.cartItem.create({
-            data: { cartId: userCart.id, productId, quantity },
-          });
-          results.push(newItem);
-        }
-      }
-
-      return res.json({
-        message: "Thêm nhiều sản phẩm thành công.",
-        items: results,
+      userCart = await prisma.cart.create({
+        data: {
+          user: { connect: { id: userId } },
+        },
+        include: { items: true },
       });
     }
 
-    // ✅ Nếu là 1 sản phẩm duy nhất
+    // Kiểm tra item đã tồn tại trong giỏ chưa
     const existingItem = await prisma.cartItem.findFirst({
-      where: { cartId: userCart.id, productId },
+      where: {
+        cartId: userCart.id,
+        productId,
+      },
     });
 
+    // Nếu có rồi thì cộng thêm số lượng
     if (existingItem) {
       const updatedItem = await prisma.cartItem.update({
         where: { id: existingItem.id },
-        data: { quantity: existingItem.quantity + quantity },
+        data: {
+          quantity: existingItem.quantity + quantity,
+        },
       });
-      return res.json({ message: "Đã cập nhật sản phẩm.", item: updatedItem });
-    } else {
-      const newItem = await prisma.cartItem.create({
-        data: { cartId: userCart.id, productId, quantity },
+      return res.json({
+        message: "Sản phẩm đã tồn tại nên đã cộng thêm số lượng.",
+        item: updatedItem,
       });
-      return res.json({ message: "Đã thêm sản phẩm mới.", item: newItem });
     }
+
+    // Nếu chưa có thì tạo mới
+    const newItem = await prisma.cartItem.create({
+      data: {
+        cartId: userCart.id,
+        productId,
+        quantity,
+      },
+    });
+
+    return res.json({
+      message: "Đã thêm sản phẩm vào giỏ hàng.",
+      item: newItem,
+    });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: "Lỗi server", err });
   }
 });
 
