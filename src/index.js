@@ -47,6 +47,8 @@ const authMiddleware = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, "SECRET_KEY");
     req.user = decoded; // Gán thông tin user vào request
+    const loggedInUserId = req.userId;
+
     next();
   } catch (err) {
     return res.status(403).json({ error: "Token không hợp lệ" });
@@ -297,11 +299,7 @@ app.delete("/cart/reset/:userId", async (req, res) => {
 app.post("/checkout/:userId", authMiddleware, async (req, res) => {
   const userId = parseInt(req.params.userId);
   const { shippingAddress, paymentMethod } = req.body;
-  if (userId !== loggedInUserId) {
-    return res
-      .status(403)
-      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
-  }
+
   if (!shippingAddress || !paymentMethod) {
     return res
       .status(400)
@@ -330,7 +328,7 @@ app.post("/checkout/:userId", authMiddleware, async (req, res) => {
         userId,
         shippingAddress,
         paymentMethod,
-        status: "Pending", // hoặc "Processing"
+        status: "Delivered",
         items: {
           create: cart.items.map((item) => ({
             productId: item.productId,
@@ -358,11 +356,7 @@ app.post("/checkout/:userId", authMiddleware, async (req, res) => {
 //Get User Cart
 app.get("/orders/:userId", authMiddleware, async (req, res) => {
   const userId = parseInt(req.params.userId);
-  if (userId !== loggedInUserId) {
-    return res
-      .status(403)
-      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
-  }
+
   try {
     const orders = await prisma.order.findMany({
       where: { userId },
@@ -386,17 +380,14 @@ app.get("/orders/:userId", authMiddleware, async (req, res) => {
 app.patch("/orders/:orderId/status", authMiddleware, async (req, res) => {
   const orderId = parseInt(req.params.orderId);
   const { status } = req.body;
-  if (userId !== loggedInUserId) {
-    return res
-      .status(403)
-      .json({ error: "Bạn không có quyền truy cập giỏ hàng này." });
-  }
+
   const validStatus = [
     "Pending",
     "Processing",
     "Shipped",
     "Delivered",
     "Cancelled",
+    "Received",
   ];
 
   if (!validStatus.includes(status)) {
@@ -484,7 +475,9 @@ app.delete("/favorite/delete", authMiddleware, async (req, res) => {
     await prisma.favorite.deleteMany({
       where: { userId, productId },
     });
+
     io.to(userId.toString()).emit("data-favorite-updated");
+
     return res.status(200).json({ message: "Favorite removed successfully" });
   } catch (err) {
     console.error("Error removing favorite:", err);
@@ -591,6 +584,75 @@ app.post("/login", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: err || "Lỗi máy chủ" });
+  }
+});
+
+// GET all reviews for a specific product
+app.get("/reviews/:productId", async (req, res) => {
+  const productId = parseInt(req.params.productId);
+
+  try {
+    const reviews = await prisma.review.findMany({
+      where: { productId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    res.json(reviews);
+  } catch (error) {
+    console.error("Failed to fetch reviews:", error);
+    res.status(500).json({ error: "Failed to fetch reviews" });
+  }
+});
+
+// POST a new review
+app.post("/api/reviews", async (req, res) => {
+  let { productId, rating, comment, orderItemId, userId } = req.body;
+
+  productId = parseInt(productId);
+  rating = parseInt(rating);
+  orderItemId = orderItemId ? parseInt(orderItemId) : undefined;
+  userId = parseInt(userId);
+
+  if (
+    isNaN(productId) ||
+    isNaN(rating) ||
+    isNaN(userId) ||
+    rating < 1 ||
+    rating > 5
+  ) {
+    return res.status(400).json({ error: "Invalid input" });
+  }
+
+  try {
+    const newReview = await prisma.review.create({
+      data: {
+        productId,
+        userId,
+        rating,
+        comment,
+        orderItem: orderItemId ? { connect: { id: orderItemId } } : undefined,
+      },
+    });
+
+    if (orderItemId) {
+      await prisma.orderItem.update({
+        where: { id: orderItemId },
+        data: { reviewId: newReview.id },
+      });
+    }
+
+    res.status(201).json(newReview);
+  } catch (error) {
+    console.error("Failed to create review:", error);
+    res.status(500).json({ error: "Failed to create review" });
   }
 });
 

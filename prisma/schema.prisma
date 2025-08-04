@@ -31,6 +31,7 @@ model User {
   favorites Favorite[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  Review    Review[]
 }
 
 model Category {
@@ -74,12 +75,15 @@ model Product {
 }
 
 model Review {
-  id        Int      @id @default(autoincrement())
-  product   Product  @relation(fields: [productId], references: [id])
+  id        Int        @id @default(autoincrement())
+  product   Product    @relation(fields: [productId], references: [id])
   productId Int
-  rating    Int // từ 1 đến 5 sao
+  user      User?      @relation(fields: [userId], references: [id]) // optional
+  userId    Int?
+  rating    Int
   comment   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
+  orderItem OrderItem?
 }
 
 model Cart {
@@ -119,6 +123,9 @@ model OrderItem {
   productId Int
   quantity  Int
   price     Float
+
+  review   Review? @relation(fields: [reviewId], references: [id])
+  reviewId Int?    @unique // null nếu chưa review
 }
 
 model Favorite {
