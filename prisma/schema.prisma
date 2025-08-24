@@ -17,6 +17,7 @@ datasource db {
 enum Role {
   ADMIN
   USER
+  SELLER
 }
 
 model User {
@@ -32,6 +33,19 @@ model User {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   Review    Review[]
+
+  seller Seller?
+}
+
+model Seller {
+  id           Int      @id @default(autoincrement())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       Int      @unique
+  phone        String?
+  taxNumber    String?
+  rating       Float? // đánh giá trung bình
+  totalRevenue Float? // tổng doanh thu
+  createdAt    DateTime @default(now())
 }
 
 model Category {
