@@ -46,6 +46,17 @@ model Seller {
   rating       Float? // đánh giá trung bình
   totalRevenue Float? // tổng doanh thu
   createdAt    DateTime @default(now())
+  shop         Shop[]
+}
+
+model Shop {
+  id      Int     @id @default(autoincrement())
+  name    String
+  address String?
+  phone   String?
+
+  sellerId Int
+  seller   Seller @relation(fields: [sellerId], references: [id])
 }
 
 model Category {
