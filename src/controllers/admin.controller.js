@@ -104,12 +104,14 @@ export const updateProduct = async (req, res) => {
       ...(minLatencyMs && { minLatencyMs: parseInt(minLatencyMs) }),
       ...(manufacturer && { manufacturer }),
     };
+
     const updated = prisma.product.update({
       where: {
         id: productId,
       },
       data,
     });
+    
   } catch (err) {
     res.status(500).json(err);
   }

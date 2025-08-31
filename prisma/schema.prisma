@@ -57,6 +57,8 @@ model Shop {
 
   sellerId Int
   seller   Seller @relation(fields: [sellerId], references: [id])
+
+  product Product[]
 }
 
 model Category {
@@ -81,7 +83,7 @@ model Product {
   cartItems  CartItem[]  @relation("ProductToCartItems")
   orderItems OrderItem[] @relation("ProductToOrderItems")
   reviews    Review[]
-  favorites  Favorite[] // ⭐ A product can be favorited by many users
+  favorites  Favorite[]
 
   modelName       String?
   shape           String?
@@ -97,6 +99,10 @@ model Product {
   supportedCodecs String[]
   minLatencyMs    Int?
   manufacturer    String?
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  shopId Int @unique
 }
 
 model Review {

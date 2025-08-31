@@ -13,4 +13,5 @@ router.post(
 
 router.delete("/reset/:userId", authMiddleware, cartController.resetCart);
 router.post("/checkout/:userId", authMiddleware, cartController.checkout);
+
 export default router;

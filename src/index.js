@@ -7,7 +7,7 @@ import orderRoutes from "./routes/order.routes.js";
 import favoriteRoutes from "./routes/favorite.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 import authRoutes from "./routes/auth.routes.js";
-
+import sellerRoutes from "./routes/seller.routes.js";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -37,7 +37,7 @@ app.use("/orders", orderRoutes);
 app.use("/favorite", favoriteRoutes);
 app.use("/reviews", reviewRoutes);
 app.use("/auth", authRoutes);
-
+app.use("/seller", sellerRoutes);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
