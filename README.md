@@ -6,7 +6,6 @@ This is the backend server for the Ecommerce web application. It uses Node.js, E
 
 - REST API for products, favorites, reviews, and more
 - Authentication and authorization
-- Real-time communication via Socket.io
 - Prisma ORM for database access
 - CSV-based product data import
 - Admin endpoints for product management
@@ -86,10 +85,4 @@ src/
 
 See the [src/routes](src/routes) folder for more details.
 
-## License
 
-ISC
-
-## Author
-
-See
